@@ -1,0 +1,71 @@
+// Codigo de Vinicius Lettieri Proenca
+// DRE: 119040830
+
+#include <stdio.h>
+#include <stdlib.h> 
+#include <pthread.h>
+
+#define PAR 0
+#define IMPAR 1
+
+int vetor[10000];
+
+void* tarefa(void *arg){
+	int par_impar = (int *)arg;
+		
+	if(par_impar == PAR){
+		printf("Realizando a thread de indices pares!\n");
+		for(int i=0; i<5000; i++)
+			vetor[i*2]++;
+	}else{
+		printf("Realizando a thread de indices impares!\n");
+		for(int i=0; i<5000; i++)
+			vetor[i*2+1]++;
+	}
+	
+	pthread_exit(NULL);
+}
+
+int main(void){
+	// Identificador das threads
+	pthread_t tid[2];
+	
+	// Inicialização do vetor
+	for(int i=0; i<10000; i++)
+		vetor[i] = 0;
+	
+	// Criação da thread que trata de indices pares
+	if(pthread_create(&tid[0], NULL, tarefa, (void*) PAR) != 0){
+		printf("Erro na criacao da thread par!\n");
+		return -1;
+	}
+	
+	// Criação da thread que trata de indices impares
+	if(pthread_create(&tid[1], NULL, tarefa, (void*) IMPAR) != 0){
+		printf("Erro na criacao da thread impar!\n");
+		return -1;
+	}
+	
+	// Aguarda o fim das duas threads
+	if(pthread_join(tid[0], NULL) != 0){
+		printf("Erro no join da thread par!\n");
+		return -1;
+	}else if(pthread_join(tid[1], NULL) != 0){
+		printf("Erro no join da thread impar!\n");
+		return -1;
+	}else{
+		
+		// Checando se os valores foram somados
+		for(int i=0; i<10000; i++){
+			if(vetor[i] != 1){
+				printf("Houve um erro na execucao da tarefa!\n");
+				return -1;
+			}
+		}
+		
+		printf("Todos os valores foram acrescidos de 1!\n");
+
+	}
+		
+	return 0;
+}
