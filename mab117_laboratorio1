@@ -9,6 +9,7 @@
 
 int vetor[10000];
 
+// Função para as threads adicionarem 1 nos índices do vetor
 void* tarefa(void *arg){
 	int par_impar = (int *)arg;
 		
