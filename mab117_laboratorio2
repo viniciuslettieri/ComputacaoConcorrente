@@ -31,6 +31,18 @@ void* tarefa(void *arg){
 	pthread_exit(NULL);
 }
 
+// Funcao de verificacao de resultado
+int verifica(int dim){
+	for(int i=0; i<dim; i++){
+		for(int j=0; j<dim; j++){
+			if(saida[i*dim + j] != dim){
+				return 0;
+			}
+		}
+	}
+	return 1;
+}
+
 int main(int argc, char *argv[]){
 	int dim_matriz;		// dimensao das matrizes
 	pthread_t *tid;		// identificadores das threads no sistema
@@ -118,15 +130,12 @@ int main(int argc, char *argv[]){
 	
 	// Exibicao dos resultados
 	printf("\nChecando Corretude da Solucao: ");
-	for(int i=0; i<dim_matriz; i++){
-		for(int j=0; j<dim_matriz; j++){
-			if(saida[i*dim_matriz + j] != dim_matriz){
-				printf("ERRO!\n");
-				return 4;
-			}
-		}
+	if(verifica(dim_matriz))
+		printf("ok\n");
+	else{
+		printf("ERRO DE SOLUCAO\n");
+		return 4;	
 	}
-	printf("ok\n");
 	
 	// Liberação da memória
 	free(matrizA);
