@@ -1,0 +1,147 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <pthread.h>
+#include "timer.h"
+
+#define min(a,b) (a<b?a:b)
+
+float *matrizA;		// matriz de entrada
+float *matrizB;		// vetor de entrada
+float *saida;		// vetor de saida
+int nthreads;		// numero de threads
+
+// Criamos uma estrutura para passar nossos argumentos para as threads
+typedef struct{
+	int id;		// identificador do elemento que a thread vai processar
+	int dim;	// dimensao das estruturas de entrada
+} tArgs;
+
+// Criamos a funcao que as threads executarao
+void* tarefa(void *arg){
+	tArgs *args = (tArgs*) arg;
+	
+	for(int k=0; k<args->dim; k++){							// coluna k da matriz B
+		for(int i=args->id; i<args->dim; i+=nthreads){		// linha i da matriz A
+			for(int j=0; j<args->dim; j++){					// elemento j a ser multiplicado
+				saida[i*(args->dim)+k] += matrizA[i*(args->dim) +j] * matrizB[j*(args->dim) +k];
+			}
+		}
+	}
+	
+	pthread_exit(NULL);
+}
+
+int main(int argc, char *argv[]){
+	int dim_matriz;		// dimensao das matrizes
+	pthread_t *tid;		// identificadores das threads no sistema
+	tArgs *args;		// identificadores locais das threads e sua dimensao
+	
+	double inicio, fim, delta, total=0;		// variaveis para medir tempo
+	
+	/* Inicia contagem da inicializacao */
+	GET_TIME(inicio);
+	
+	// Leitura e avaliação dos parametros de entrada
+	if(argc < 3){			// deve ler o tamanho da matriz e a quantidade de threads
+		printf("Digite: %s <dimensao da matriz> <quantidade de threads\n", argv[0]);
+		return 1;
+	}
+	dim_matriz = atoi(argv[1]);
+	nthreads = min(atoi(argv[2]), dim_matriz);		// tratamos para que nthreads nao seja maior que a dimensao
+	
+	// Alocação da memória para a estrutura de dados
+	matrizA = (float*) malloc(sizeof(float) * dim_matriz * dim_matriz);
+	if(matrizA == NULL){			// erro na alocacao de memoria
+		printf("ERRO DE MALLOC\n"); return 2;
+	}
+	matrizB = (float*) malloc(sizeof(float) * dim_matriz * dim_matriz);
+	if(matrizB == NULL){			// erro na alocacao de memoria
+		printf("ERRO DE MALLOC\n"); return 2;
+	}
+	saida = (float*) malloc(sizeof(float) * dim_matriz * dim_matriz);
+	if(saida == NULL){			// erro na alocacao de memoria
+		printf("ERRO DE MALLOC\n"); return 2;
+	}
+	
+	// Inicialização da estrutura de dados
+	for(int i=0; i<dim_matriz; i++){
+		for(int j=0; j<dim_matriz; j++){
+			matrizA[i*dim_matriz + j] = 1;
+			matrizB[i*dim_matriz + j] = 1;
+			saida[i*dim_matriz + j] = 0;
+		}
+	}
+	
+	/* Calculando o tempo de execucao da inicializacao*/
+	GET_TIME(fim);
+	delta = fim-inicio;
+	total += delta;
+	printf("Tempo de inicializacao: %lf\n", delta);
+	
+	/* Inicia contagem da multiplicacao */
+	GET_TIME(inicio);
+	
+	// Multiplica a matriz pelo vetor [Usando Concorrencia]
+	// Nossa estratégia eh intercalar as linhas da matriz entre as threads
+	tid = (pthread_t*) malloc(sizeof(pthread_t) * nthreads);
+	if(tid == NULL){			// erro na alocacao de memoria
+		printf("ERRO DE MALLOC\n"); return 2;
+	}
+	args = (tArgs*) malloc(sizeof(tArgs) * nthreads);
+	if(args == NULL){			// erro na alocacao de memoria
+		printf("ERRO DE MALLOC\n"); return 2;
+	}
+	
+	for(int i=0; i<nthreads; i++){
+		(args+i)->dim = dim_matriz;
+		(args+i)->id = i;
+		if(pthread_create(tid+i, NULL, tarefa, (void*)(args+i))){
+			printf("ERRO NO PTHREAD_CREATE\n"); return 3;
+		}
+		
+	}
+	
+	for(int i=0; i<nthreads; i++){
+		if(pthread_join(*(tid+i), NULL)){
+			printf("ERRO NO PTHREAD_CREATE\n"); return 3;
+		}
+	}
+	
+	/* Calcula o tempo de execucao da multiplicacao */
+	GET_TIME(fim);
+	delta = fim-inicio;
+	total += delta;
+	printf("Tempo de multiplicacao: %lf\n", delta);
+	
+	/* Inicia contagem da finalizacao */
+	GET_TIME(inicio);
+	
+	// Exibicao dos resultados
+	printf("\nChecando Corretude da Solucao: ");
+	for(int i=0; i<dim_matriz; i++){
+		for(int j=0; j<dim_matriz; j++){
+			if(saida[i*dim_matriz + j] != dim_matriz){
+				printf("ERRO!\n");
+				return 4;
+			}
+		}
+	}
+	printf("ok\n");
+	
+	// Liberação da memória
+	free(matrizA);
+	free(matrizB);
+	free(saida);
+	free(args);
+	free(tid);
+	
+	/* Calcula o tempo de execucao da multiplicacao */
+	GET_TIME(fim);
+	delta = fim-inicio;
+	total += delta;
+	printf("Tempo de finalizacao: %lf\n", delta);
+	
+	printf("Tempo total: %lf\n", total);
+	
+	return 0;
+}
