@@ -1,0 +1,112 @@
+#include <pthread.h>
+#include <stdio.h>
+#include <stdlib.h>
+
+#define NTHREADS 4
+#define TCOUNT 20
+
+/* Variaveis globais */
+int estado_atual = 1;		// 1 = Seja bem-vindo / 2 e 3 = Fique a Vontade ou Sente-se por favor / 4 = Volte Sempre
+pthread_mutex_t mutex_estado;
+pthread_cond_t cond_estado2e3, cond_estado4;
+
+/* Thread 1: Volte Sempre! */
+void *t1(void *args){
+	pthread_mutex_lock(&mutex_estado);
+	
+	// Enquanto nao estiver no estado 2 ou 3 fica bloqueado
+	while(estado_atual != 4){
+		pthread_cond_wait(&cond_estado4, &mutex_estado);
+	}
+	// Imprime a mensagem
+	printf("Volte Sempre!\n");
+	// Passa para o proximo estado
+	estado_atual++;
+	
+	pthread_mutex_unlock(&mutex_estado);
+}
+
+/* Thread 2: Fique a vontade. */
+void *t2(void *args){
+	pthread_mutex_lock(&mutex_estado);
+	
+	// Enquanto nao estiver no estado 2 ou 3 fica bloqueado
+	while(estado_atual != 2 && estado_atual != 3){
+		pthread_cond_wait(&cond_estado2e3, &mutex_estado);
+	}
+	// Imprime a mensagem
+	printf("Fique a vontade.\n");
+	// Passa para o proximo estado
+	estado_atual++;
+	
+	// Alerta o estado 4 para executar
+	if(estado_atual == 4)
+		pthread_cond_signal(&cond_estado4);
+	
+	pthread_mutex_unlock(&mutex_estado);
+}
+
+/* Thread 3: Sente-se por favor. */
+void *t3(void *args){
+	pthread_mutex_lock(&mutex_estado);
+	
+	// Enquanto nao estiver no estado 2 ou 3 fica bloqueado
+	while(estado_atual != 2 && estado_atual != 3){
+		pthread_cond_wait(&cond_estado2e3, &mutex_estado);
+	}
+	// Imprime a mensagem
+	printf("Sente-se por favor.\n");
+	// Passa para o proximo estado
+	estado_atual++;
+	
+	// Alerta o estado 4 para executar
+	if(estado_atual == 4)
+		pthread_cond_signal(&cond_estado4);
+	
+	pthread_mutex_unlock(&mutex_estado);
+}
+
+/* Thread 4: Seja bem-vindo! */
+void *t4(void *args){
+	// Impressao da mensagem
+	printf("Seja bem-vindo!\n");
+	
+	// Passa para proximo estado
+	pthread_mutex_lock(&mutex_estado);
+	estado_atual++;
+	pthread_mutex_unlock(&mutex_estado);
+
+	// Avisa as threads 2 e 3 para executarem
+    pthread_cond_broadcast(&cond_estado2e3);
+
+	pthread_exit(NULL);
+}
+
+/* Funcao principal */
+int main(int argc, char *argv[]) {
+	int i; 
+	pthread_t threads[NTHREADS];
+	
+	// Inicializa o mutex e a variavel de condicao
+	pthread_mutex_init(&mutex_estado, NULL);
+	pthread_cond_init(&cond_estado2e3, NULL);
+	pthread_cond_init(&cond_estado4, NULL);
+	
+	// Cria as threads
+	pthread_create(&threads[0], NULL, t1, NULL);
+	pthread_create(&threads[1], NULL, t2, NULL);
+	pthread_create(&threads[2], NULL, t3, NULL);
+	pthread_create(&threads[3], NULL, t4, NULL);
+	
+	// Espera o fim das threads
+	for (i = 0; i < NTHREADS; i++) {
+		pthread_join(threads[i], NULL);
+	}
+	
+	// Desaloca variaveis
+	pthread_mutex_destroy(&mutex_estado);
+	pthread_cond_destroy(&cond_estado2e3);
+	pthread_cond_destroy(&cond_estado4);
+	
+	return 0;
+}
