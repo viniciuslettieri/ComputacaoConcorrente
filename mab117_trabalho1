@@ -1,0 +1,194 @@
+/* Trabalho 1 de Computacao Concorrente. Algoritmo KMP Multi-Thread para Busca de Padrao em Texto */
+/* Por Vinicius Lettieri */
+/* Esse codigo foi gerado e executado no Sistema Operacional Windows */
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <pthread.h>
+#include <math.h>
+#include "timer.h"
+#define MIN(a,b) (a<b?a:b)
+
+// variaveis para a busca na string
+long long int tam_sequencia, tam_padrao;
+long long int *auxiliar;
+char *sequencia, *padrao; 
+
+int nthreads;
+
+void build_aux(char padrao[], long long int aux[], long long int tam){
+    long long int j = 0, i = 1;
+	
+    aux[0] = 0;
+    while(i < tam){
+        if(padrao[j] == padrao[i]){
+            aux[i++] = ++j;
+        }else{
+            if(j != 0)
+                j = aux[j-1];
+            else
+                aux[i++] = 0;
+        }
+    }
+}
+
+long long int kmp(char main[], char padrao[], long long int aux[], long long int tam1, long long int tam2){
+    long long int tot = 0, j = 0, i = 0;
+	
+    while(i < tam1){
+        if(main[i] == padrao[j]){
+            j++; i++;
+			
+            if(j == tam2){		//padrao encontrado
+                tot++; 			
+                j = aux[j-1];	
+            }
+        }else{
+            if(j != 0){
+                j = aux[j-1];
+            }else
+                i++;
+        }
+    }
+    return tot;
+}
+
+void* tarefa(void *arg){
+	long long int *idptr = (long long int*) arg;
+	long long int id = (long long int) *idptr;
+	long long int tam_bloco = tam_sequencia/nthreads;
+	long long int inicio = id*tam_bloco;
+	long long int tamanho;
+	
+	if(id == nthreads-1){	// ultimo bloco
+		tamanho = tam_sequencia-inicio;
+	}else{					// outros blocos
+		// existe um pequeno overlap entre o fim de uma thread e o inicio da seguinte
+		// usamos o MIN para garantir que nao ultrapassa o fim da sequencia
+		tamanho = MIN(tam_bloco + tam_padrao -1, tam_sequencia-inicio);
+	}
+	
+	long long int *quant = malloc(sizeof(long long int));
+	if(quant == NULL){
+		fprintf(stderr, "Erro de malloc\n");
+		exit(1);
+	}	
+	
+	*quant = kmp(sequencia+inicio, padrao, auxiliar, tamanho, tam_padrao);	
+	
+	pthread_exit((void*) quant);
+}
+
+int main(int argc, char *argv[]){
+	pthread_t *tid;					// identificadores das threads no sistema
+	long long int *retornoThread;
+	double inicio = 0, final = 0, totalseq = 0, totalconc = 0;
+	char linha[50];
+	
+// Recebimento da quantidade de threads por parametro
+	if(argc != 2){
+		fprintf(stderr, "Execute o programa com: %s <numero de threads>\n", argv[0]);
+		return 1;
+	}
+	nthreads = atoi(argv[1]);
+
+// Recebimento do tamanho da sequencia e seus caracteres
+	printf("Qual o tamanho da sequencia? \n");
+	scanf("%lld", &tam_sequencia);
+	getchar();
+		
+	sequencia = (char*)malloc(sizeof(char) * (tam_sequencia+1));
+	if(sequencia == NULL){
+		fprintf(stderr, "Erro de malloc\n");
+		return 1;
+	}
+
+	printf("Informe a sequencia: \n");
+	for(long long int i = 0; i<tam_sequencia; i++)
+		scanf("%c", (sequencia+i));
+
+	*(sequencia+tam_sequencia) = '\0';
+
+// Recebimento do tamanho do padrao e seus caracteres
+	printf("Qual o tamanho do padrao a ser buscado? ");
+	scanf("%lld", &tam_padrao);
+	getchar();
+
+	padrao = (char*)malloc(sizeof(char) * (tam_padrao+1));
+	if(padrao == NULL){
+		fprintf(stderr, "Erro de malloc\n");
+		return 1;
+	}
+	
+	printf("Informe o padrao: \n");
+	for(long long int i = 0; i<tam_padrao; i++)
+		scanf("%c", (padrao+i));
+
+// Construcao do vetor auxiliar
+	*(padrao+tam_padrao) = '\0';	
+	auxiliar = (long long int*) malloc(sizeof(long long int) * tam_padrao);
+	build_aux(padrao, auxiliar, tam_padrao);
+	
+// Busca de padrões - Sequencial
+	GET_TIME(inicio);
+	
+	/* Busca pelos padroes */
+	long long int tot_padroes_seq = kmp(sequencia, padrao, auxiliar, tam_sequencia, tam_padrao);
+	
+	GET_TIME(final);
+	totalseq = final-inicio;
+	
+// Busca de padrões - Concorrente
+	GET_TIME(inicio);
+	
+	/* Cria o vetor de identificadores */
+	tid = (pthread_t*) malloc(sizeof(pthread_t) * nthreads);
+	if(tid == NULL){
+		fprintf(stderr, "Erro de malloc\n");
+		return 2;
+	}
+	
+	/* Cria as threads */
+	long long int ids[nthreads];
+	for(int i=0; i<nthreads; i++){
+		ids[i] = i;
+		if(pthread_create(tid+i, NULL, tarefa, (void*)&ids[i])){
+			fprintf(stderr, "Erro de pthread_create\n");
+			return 3;
+		}
+	}
+	
+	long long int tot_padroes_conc = 0;
+	/* Aguarda o fim das threads e coleta os retornos */
+	for(int i=0; i<nthreads; i++){
+		if(pthread_join(*(tid+i), (void*)&retornoThread)){
+			fprintf(stderr, "Erro de pthread_join\n");
+			return 3;
+		}
+		tot_padroes_conc += *retornoThread;		// soma os resultados
+		free(retornoThread);
+	}
+	
+	GET_TIME(final);
+	totalconc = final-inicio;
+	
+// Exibir os resultados
+	printf("\nSequencia geral:\n%s\n", sequencia);
+	printf("Padrao buscado:		%s\n", padrao);
+	printf("Auxiliar do padrao:	");
+	for(long long int i=0; i<tam_padrao; i++) 
+		printf("%lld", auxiliar[i]);
+	
+	printf("\nTotal de padroes encontrados (sequencial):  %lld\n", tot_padroes_seq);
+	printf("\nTotal de padroes encontrados (concorrente): %lld\n", tot_padroes_conc);
+	printf("\n\nTempo total sequencial:   %.10lf\n", totalseq);
+	printf("\nTempo total concorrente:  %.10lf\n", totalconc);
+
+// Liberar memória
+	free(tid);
+	free(auxiliar);
+	free(padrao);
+	free(sequencia);
+	
+	return 0;
+}
