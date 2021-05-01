@@ -77,7 +77,7 @@ void *t4(void *args){
 	pthread_mutex_unlock(&mutex_estado);
 
 	// Avisa as threads 2 e 3 para executarem
-    pthread_cond_broadcast(&cond_estado2e3);
+	pthread_cond_broadcast(&cond_estado2e3);
 
 	pthread_exit(NULL);
 }
