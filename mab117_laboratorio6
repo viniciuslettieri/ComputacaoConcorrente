@@ -1,0 +1,97 @@
+
+class Monit {
+   private int vetor[];
+   private int tam_vetor;
+
+   public Monit(int vetor[]) {
+      this.vetor = vetor;
+      this.tam_vetor = vetor.length;
+   }
+
+   public synchronized void inc(int index) {
+      this.vetor[index] += 1;
+   }
+
+   public synchronized int[] get() {
+      return this.vetor;
+   }
+
+   public int get_size() {
+      return this.tam_vetor;
+   }
+}
+
+class NossaThread extends Thread {
+   private int id;
+   Monit monit;
+   private int tam_vetor;
+
+   // contador de threads (compartilhado entre todas as instancias)
+   private static int tot_threads;
+
+   public NossaThread(int tid, Monit m) {
+      this.id = tid;
+      this.monit = m;
+      this.tam_vetor = m.get_size();
+      tot_threads++;
+   }
+
+   public void run() {
+      int inicio = id * (tam_vetor/tot_threads);
+      int fim = inicio + (tam_vetor/tot_threads);
+      if (id == tot_threads - 1) { // ultima thread tem que ir ate o fim
+         fim = tam_vetor;
+      }
+
+      System.out.println("Thread " + this.id + " iniciou com [" + inicio + "," + (fim-1) + "]!");
+
+      for (int i = inicio; i < fim; i++) {
+         this.monit.inc(i);
+      }
+
+      System.out.println("Thread " + this.id + " terminou!");
+   }
+}
+
+class Atividade5 {
+   static final int N = 3;
+
+   public static void main(String[] args) {
+      // vetor de threads
+      Thread[] threads = new Thread[N];
+
+      // cria o vetor e preenche
+      int vetor[] = new int[20];
+      for (int i = 0; i < 20; i++) {
+         vetor[i] = i;
+      }
+
+      // cria o monit
+      Monit monit = new Monit(vetor);
+
+      // cria as threads
+      for (int i = 0; i < threads.length; i++) {
+         threads[i] = new NossaThread(i, monit);
+      }
+
+      // inicia as threads
+      for (int i = 0; i < threads.length; i++) {
+         threads[i].start();
+      }
+
+      // espera pelo termino de todas as threads
+      for (int i = 0; i < threads.length; i++) {
+         try {
+            threads[i].join();
+         } catch (InterruptedException e) {
+            return;
+         }
+      }
+
+      vetor = monit.get();
+      System.out.println("\nVetor incrementado:");
+      for (int i = 0; i < vetor.length; i++) {
+         System.out.print(vetor[i] + " ");
+      }
+   }
+}
