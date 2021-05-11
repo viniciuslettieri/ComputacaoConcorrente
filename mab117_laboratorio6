@@ -1,3 +1,4 @@
+// Recurso compartilhada de array
 class Monit {
    private int vetor[];
    private int tam_vetor;
@@ -65,7 +66,7 @@ class Atividade5 {
       }
       System.out.println("\n");
 
-      // cria o monit
+      // cria o recurso compartilhado do array
       Monit monit = new Monit(vetor);
 
       // cria as threads
