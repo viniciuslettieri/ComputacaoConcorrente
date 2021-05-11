@@ -7,15 +7,12 @@ class Monit {
       this.vetor = vetor;
       this.tam_vetor = vetor.length;
    }
-
-   public synchronized void inc(int index) {
+   public void inc(int index) {
       this.vetor[index] += 1;
    }
-
-   public synchronized int[] get() {
+   public int[] get() {
       return this.vetor;
    }
-
    public int get_size() {
       return this.tam_vetor;
    }
@@ -54,7 +51,7 @@ class NossaThread extends Thread {
 }
 
 class Atividade5 {
-   static final int N = 3;
+   static final int N = 4;
 
    public static void main(String[] args) {
       // vetor de threads
@@ -62,9 +59,12 @@ class Atividade5 {
 
       // cria o vetor e preenche
       int vetor[] = new int[20];
+      System.out.println("\nVetor inicial:");
       for (int i = 0; i < 20; i++) {
          vetor[i] = i;
+         System.out.print(vetor[i] + " ");
       }
+      System.out.println("\n");
 
       // cria o monit
       Monit monit = new Monit(vetor);
