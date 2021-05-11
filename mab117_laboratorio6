@@ -1,4 +1,3 @@
-
 class Monit {
    private int vetor[];
    private int tam_vetor;
