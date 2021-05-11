@@ -1,4 +1,4 @@
-// Recurso compartilhada de array
+// Recurso compartilhado do array
 class Monit {
    private int vetor[];
    private int tam_vetor;
