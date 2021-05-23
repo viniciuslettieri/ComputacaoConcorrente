@@ -1,0 +1,272 @@
+import java.lang.Math;
+
+class Monit {
+    private int sensoresEsperando = 0;      // quantidade de sensores esperando execução
+    private int sensoresAtivos = 0;         // quantidade de sensores executando
+    private int atuadoresAtivos = 0;        // quantidade de atuadores executando
+    private boolean log_toggle;
+
+    Monit(boolean log_toggle){
+        this.log_toggle = log_toggle;
+    }
+
+    public synchronized void iniciaSensor(int id){
+        sensoresEsperando++;
+        
+        // Esperamos ate nao ter nenhum sensor ou atuador ativo
+        try{
+            boolean foi_bloqueado = false;
+            while(atuadoresAtivos!=0 || sensoresAtivos!=0){
+                if(foi_bloqueado == false && log_toggle)
+                    System.out.println("check.checaSensorEspera("+id+")");
+                
+                foi_bloqueado = true;
+                wait();
+            }
+            if(foi_bloqueado && log_toggle){      
+                System.out.println("check.checaSensorSaiEspera("+id+")");
+            }
+        }catch(InterruptedException e){
+            System.out.println("Erro no wait: " + e);
+        }
+
+        sensoresEsperando--;
+        
+        if(log_toggle)
+            System.out.println("check.checaSensorInicia("+id+")");
+        sensoresAtivos++;
+    }
+    public synchronized void terminaSensor(int id){
+        if(log_toggle)
+            System.out.println("check.checaSensorTermina("+id+")");
+        sensoresAtivos--;
+        notifyAll();
+    }
+    public synchronized void iniciaAtuador(int id){
+        // Esperamos ate nao ter nenhum sensor ativo ou esperando a execucao
+        try{    
+            boolean foi_bloqueado = false;
+            while(sensoresAtivos!=0 || sensoresEsperando!=0){
+                if(foi_bloqueado == false && log_toggle)
+                    System.out.println("check.checaAtuadorEspera("+id+")");
+                
+                foi_bloqueado = true;
+                wait();
+            }
+            if(foi_bloqueado && log_toggle){
+                System.out.println("check.checaAtuadorSaiEspera("+id+")");
+            }
+        }catch(InterruptedException e){
+            System.out.println("Erro no wait: " + e);
+        }
+        
+        if(log_toggle)
+            System.out.println("check.checaAtuadorInicia("+id+")");
+        atuadoresAtivos++;
+    }
+    public synchronized void terminaAtuador(int id){
+        if(log_toggle)
+            System.out.println("check.checaAtuadorTermina("+id+")");
+        atuadoresAtivos--;
+        notifyAll();
+    }
+}
+
+class Recurso {
+    private int idx_atual, tot_leituras_geral;
+    private int[][] temperaturas = new int[60][3];  // guarda [temp,id_sensor,id_leitura]
+    private int[] tot_leituras;        // guarda a quantidade de leituras para cada sensor
+    private boolean log_toggle;
+
+    Recurso(int num_sensores, boolean log_toggle){
+        this.tot_leituras = new int[num_sensores];
+        this.idx_atual = 0;
+        this.tot_leituras_geral = 0;
+        this.log_toggle = log_toggle;
+    }
+
+    // Como o monitor garante que só um sensor(escritor) trabalha por vez, não precisamos nos
+    // preocupar com condição de corrida nesse método de escrita.
+    public synchronized void escreve(int temperatura, int id_sensor){
+        if(log_toggle)
+            System.out.println("check.checaEscritaRecurso(" + id_sensor + ", " + temperatura + ")");
+
+        tot_leituras_geral++;
+        temperaturas[idx_atual][0] = temperatura;
+        temperaturas[idx_atual][1] = id_sensor;
+        temperaturas[idx_atual][2] = tot_leituras[id_sensor]++;
+
+        idx_atual = Math.floorMod(idx_atual+1, 60);
+    }
+
+    // Pegar as ultimas leituras do sensor ainda disponiveis e coloca em leituras[] 
+    // Retorna a quantidade de leituras encontradas
+    public synchronized int get_leituras(int id_sensor, int leituras[]){
+        int encontrados = 0;
+        
+        String str = "temps"+id_sensor+" = [";
+
+        // Olhamos para todas as posições anteriores pegando aquelas que possuem o id pedido 
+        for(int i=0; i<Math.min(tot_leituras_geral, 60); i++){
+            int idx = Math.floorMod(idx_atual-1-i, 60);
+            if(temperaturas[idx][1] == id_sensor){
+                leituras[encontrados] = temperaturas[idx][0];
+
+                if(encontrados!=0) str += ", ";
+                str += temperaturas[idx][0];
+
+                encontrados++;
+            }
+        }
+
+        if(log_toggle){
+            System.out.println(str + "]");
+            System.out.println("check.checaGetLeitura(" + id_sensor + ", " + encontrados + ", temps"+ id_sensor +")");
+        }
+        
+        return encontrados;
+    }
+}
+
+class Sensor extends Thread{
+    private int id;
+    private Monit monit;
+    private Recurso recurso;
+    private boolean log_toggle;
+
+    Sensor(int id, Monit m, Recurso rec, boolean log_toggle){
+        this.id = id;
+        this.monit = m;
+        this.recurso = rec;
+        this.log_toggle = log_toggle;
+    }
+    
+    public void run(){
+        try{
+            while(true){
+                monit.iniciaSensor(this.id);
+
+                // Obtenção e escrita da temperatura
+                int min = 25, max = 40;
+                int randomNum = (int) (min + Math.random()*(max+1-min));
+                if(randomNum>30){
+                    recurso.escreve(randomNum, id);
+                }
+                
+                monit.terminaSensor(this.id);
+                sleep(1000);
+            }
+        }catch(InterruptedException e){
+            System.out.println("Erro no sleep: " + e);
+        }
+    }
+}
+
+class Atuador extends Thread{
+    private int id;
+    private Monit monit;
+    private Recurso recurso;
+    private boolean log_toggle;
+
+    Atuador(int id, Monit m, Recurso rec, boolean log_toggle){
+        this.id = id;
+        this.monit = m;
+        this.recurso = rec;
+        this.log_toggle = log_toggle;
+    }
+    
+    public void run(){
+        try{
+            while(true){
+                int temps[] = new int[60];
+                monit.iniciaAtuador(id);
+
+                // Calculo dos alertas
+                int quant_leituras = recurso.get_leituras(id, temps);
+                int acima35 = 0;
+                for(int i=0; i<5 && i<quant_leituras; i++){         // Checagem das 5 ultimas
+                    if(temps[i] > 35) acima35++;
+                }
+                if(acima35==5){
+                    if(log_toggle)
+                        System.out.println("check.checaAlertaVermelho("+id+", temps"+id+")");
+                    else
+                        System.out.println("Alerta Vermelho para sensor "+id+"!");
+                }else{
+                    for(int i=5; i<15 && i<quant_leituras; i++){    // Checagem das 15 ultimas
+                        if(temps[i] > 35) acima35++;
+                    } 
+                    if(acima35>=5){
+                        if(log_toggle)
+                            System.out.println("check.checaAlertaAmarelo("+id+", temps"+id+")");
+                        else
+                            System.out.println("Alerta Amarelo para sensor "+id+"!");
+                    }else{
+                        if(log_toggle)
+                            System.out.println("check.checaAlertaNormal("+id+", temps"+id+")");
+                        else
+                            System.out.println("Condicao Normal para sensor "+id+"!");
+                    }
+                }
+
+                // Calculo da media
+                int soma = 0;
+                for(int i=0; i<quant_leituras; i++){
+                    soma += temps[i];
+                }
+                if(quant_leituras!=0){
+                    if(log_toggle)
+                        System.out.println("check.checaMedia("+id+", "+ (double)soma/quant_leituras +", temps"+id+")");
+                    else
+                        System.out.println("Media das temperaturas = "+ (double)soma/quant_leituras + " para sensor "+id);
+                }else{
+                    if(log_toggle)
+                        System.out.println("check.checaMedia("+id+", "+ 0.0 +", temps"+id+")");
+                    else
+                        System.out.println("Media das temperaturas = 0.0 para sensor "+id);
+                }
+
+                monit.terminaAtuador(id);
+                sleep(2000);
+            }
+        }catch(InterruptedException e){
+            System.out.println("Erro no sleep: " + e);
+        }
+    }
+}
+
+public class Principal {
+    public static void main(String[] args){
+        // Leitura da quantidade de sensores
+        int nsensores;
+        boolean log_toggle;
+        if(args.length != 2){
+            System.out.println("Ao rodar o programa passe a quantidade de sensores como parametro:\njava Principal <nsensores> <opcao de log (1 ou 0)>\n");
+            return;
+        }else{
+            nsensores = Integer.parseInt(args[0]);
+            log_toggle = (Integer.parseInt(args[1]) == 1);
+        }
+
+        // Criacao dos recursos compartilhados
+        Monit monit = new Monit(log_toggle);
+        Recurso rec = new Recurso(nsensores, log_toggle);
+  
+        // Criacao das Threads
+        Thread[] threads = new Thread[nsensores*2];
+  
+        for (int i=0; i<nsensores; i++) {
+            threads[2*i] = new Atuador(i, monit, rec, log_toggle);
+            threads[2*i+1] = new Sensor(i, monit, rec, log_toggle);
+        }
+
+        // Inicio do Log
+        if(log_toggle)
+            System.out.println("import Checador_Completo\ncheck = Checador_Completo.Checador("+nsensores+")");
+
+        // Inicio das threads
+        for (int i=0; i<threads.length; i++) {
+           threads[i].start();
+        }
+    }
+}
