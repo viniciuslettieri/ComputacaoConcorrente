@@ -1,0 +1,99 @@
+class Checador:
+    def __init__(self, quantsensores):
+        self.sensoresAtuando = 0
+        self.atuadoresAtuando = 0
+        self.sensoresEsperando = 0
+        self.idx_atual = 0
+        self.tot_leituras_geral = 0
+        self.temperaturas = [[0]*3]*60                  # guarda [temp,id_sensor,id_leitura]
+        self.tot_leituras = [0]*quantsensores           # guarda a quantidade de leituras para cada sensor
+
+    def checaAtuadorInicia(self, id):
+        if(self.sensoresAtuando != 0):
+            print("ERRO: Atuador " + str(id) + " iniciou com sensores executando!")
+        elif(self.sensoresEsperando != 0):
+            print("ERRO: Atuador " + str(id) + " iniciou com sensores esperando!")
+        self.atuadoresAtuando += 1
+
+    def checaAtuadorTermina(self, id):
+        self.atuadoresAtuando -= 1
+
+    def checaAtuadorEspera(self, id):
+        if(self.sensoresAtuando == 0 and self.sensoresEsperando == 0):
+            print("ERRO: Atuador " + str(id) + " esperando sem sensores atuando ou esperando!")
+
+    def checaAtuadorSaiEspera(self, id):
+        if(self.sensoresAtuando != 0):
+            print("ERRO: Atuador " + str(id) + " saiu da espera com sensores executando!")
+        elif(self.sensoresEsperando != 0):
+            print("ERRO: Atuador " + str(id) + " saiu da espera com sensores esperando!")
+
+    def checaSensorInicia(self, id):
+        if(self.atuadoresAtuando != 0 or self.sensoresAtuando != 0):
+            print("ERRO: Sensor " + str(id) + " iniciou com outros executando!")
+        self.sensoresAtuando += 1
+
+    def checaSensorTermina(self, id):
+        self.sensoresAtuando -= 1
+    
+    def checaSensorEspera(self, id):
+        if(self.atuadoresAtuando == 0 and self.sensoresAtuando == 0):
+            print("ERRO: Sensor " + str(id) + " esperando sem nenhum atuador ou sensor executando!")
+        self.sensoresEsperando += 1
+
+    def checaSensorSaiEspera(self, id):
+        if(self.atuadoresAtuando != 0 or self.sensoresAtuando != 0):
+            print("ERRO: Sensor " + str(id) + " saiu da espera com outros executando!")
+        self.sensoresEsperando -= 1
+
+    def checaEscritaRecurso(self, id, temperatura):
+        self.tot_leituras_geral = self.tot_leituras_geral+1
+        self.temperaturas[self.idx_atual] = [temperatura, id, self.tot_leituras[id]]
+        self.tot_leituras[id] = self.tot_leituras[id] +1
+
+        self.idx_atual = (self.idx_atual + 1) % 60
+
+    def checaGetLeitura(self, id, quant_encontrados, leituras):
+        encontrados = 0 
+        for i in range(min(self.tot_leituras_geral, 60)):
+            idx = (self.idx_atual-1-i) % 60
+            if self.temperaturas[idx][1] == id:
+                if self.temperaturas[idx][0] != leituras[encontrados]:
+                    print("ERRO: Funcao getLeitura para " + str(id) + " retornou leituras erradas!")
+                    return
+                    
+                encontrados = encontrados+1
+
+        if encontrados != quant_encontrados:
+            print("ERRO: Quantidades distintas de leituras encontrados em "+str(id)+"!")
+
+    def checaAlertaVermelho(self, id, leituras):
+        cont = 0
+        for i in range(min(5, len(leituras))):
+            if leituras[i] > 35:
+                cont = cont+1
+        if cont != 5:
+            print("ERRO: Alerta Vermelho para " + str(id) + " sem 5 leituras acima de 35!")
+
+    def checaAlertaAmarelo(self, id, leituras):
+        cont = 0
+        for i in range(min(15, len(leituras))):
+            if leituras[i] > 35:
+                cont = cont+1
+        if cont < 5:
+            print("ERRO: Alerta Amarelo para " + str(id) + " sem 5 leituras dentre 15 acima de 35!")
+
+    def checaAlertaNormal(self, id, leituras):
+        cont = 0
+        for i in range(min(15, len(leituras))):
+            if leituras[i] > 35:
+                cont = cont+1
+        if cont > 5:
+            print("ERRO: Condicao Normal para " + str(id) + " com 5 leituras dentre 15 acima de 35!")
+
+    def checaMedia(self, id, media, leituras):
+        if len(leituras)==0:
+            if media != 0.0:
+                print("ERRO: A media de " + str(id) + " foi " + str(media) + " mas seria 0!")
+        elif abs( sum(leituras)/len(leituras) - media ) > 0.001:            # checamos com determinado erro de precisão do float
+            print("ERRO: A media de " + str(id) + " foi " + str(media) + " mas seria " + str(sum(leituras)/len(leituras)) + "!")
