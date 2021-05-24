@@ -1,0 +1,127 @@
+#include <pthread.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <semaphore.h>
+
+#define NTHREADS 4
+
+/* Variaveis globais */
+int estado_atual = 4;		// 4 = Seja bem-vindo / 3 e 2 = Fique a Vontade ou Sente-se por favor / 1 = Volte Sempre
+sem_t cond_2e3, cond_1, exclusao;
+
+/* Thread 1: Volte Sempre! */
+void *t1(void *args){
+    // sincronizacao condicional com semaforo
+    sem_wait(&cond_1);
+
+	// Imprime a mensagem
+	printf("Volte Sempre!\n");
+
+    // Inicia Seção Critica
+    sem_wait(&exclusao);
+
+	// Passa para o proximo estado
+	estado_atual--;
+
+    // Fim da Seção Crítica
+    sem_post(&exclusao);
+}
+
+/* Thread 2: Fique a vontade. */
+void *t2(void *args){
+    // sincronizacao condicional com semaforo
+    sem_wait(&cond_2e3);
+
+	// Imprime a mensagem
+	printf("Fique a vontade.\n");
+
+    // Inicia Seção Critica
+    sem_wait(&exclusao);
+
+	// Passa para o proximo estado
+	estado_atual--;
+
+    // Fim da Seção Crítica
+    sem_post(&exclusao);
+
+    // Sinaliza a proxima thread
+    if(estado_atual == 2){
+        sem_post(&cond_2e3);    // chama a thread 3
+    }else{
+        sem_post(&cond_1);      // chama a thread 1
+    }
+}
+
+/* Thread 3: Sente-se por favor. */
+void *t3(void *args){
+    // sincronizacao condicional com semaforo
+    sem_wait(&cond_2e3);
+
+	// Imprime a mensagem
+	printf("Sente-se por favor.\n");
+
+    // Inicia Seção Critica
+    sem_wait(&exclusao);
+
+	// Passa para o proximo estado
+	estado_atual--;
+
+    // Fim da Seção Crítica
+    sem_post(&exclusao);
+
+    // Sinaliza a proxima thread
+    if(estado_atual == 2){
+        sem_post(&cond_2e3);    // chama a thread 2
+    }else{
+        sem_post(&cond_1);      // chama a thread 1
+    }
+}
+
+/* Thread 4: Seja bem-vindo! */
+void *t4(void *args){
+	// Imprime a mensagem
+	printf("Seja bem-vindo!\n");
+
+    // Inicia Seção Critica
+    sem_wait(&exclusao);
+
+	// Passa para o proximo estado
+	estado_atual--;
+
+    // Fim da Seção Crítica
+    sem_post(&exclusao);
+
+    // Sinaliza a Thread 2 ou 3
+    sem_post(&cond_2e3);
+}
+
+/* Funcao principal */
+int main(int argc, char *argv[]) {
+	int i; 
+	pthread_t threads[NTHREADS];
+	
+	// Inicializa os semaforos
+	sem_init(&exclusao, 0, 1);          // binario
+	sem_init(&cond_2e3, 0, 0);
+    sem_init(&cond_1, 0, 0);
+
+	// Cria as threads
+	pthread_create(&threads[3], NULL, t4, NULL);
+	pthread_create(&threads[2], NULL, t3, NULL);
+	pthread_create(&threads[1], NULL, t2, NULL);
+	pthread_create(&threads[0], NULL, t1, NULL);
+	
+	// Espera o fim das threads
+	for (i = 0; i < NTHREADS; i++) {
+		pthread_join(threads[i], NULL);
+	}
+	
+	// Desaloca os semaforos
+    sem_destroy(&exclusao);
+    sem_destroy(&cond_2e3);
+    sem_destroy(&cond_1);
+
+    pthread_exit(NULL);
+	
+	return 0;
+}
